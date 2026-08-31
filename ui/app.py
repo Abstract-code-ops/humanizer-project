@@ -85,11 +85,13 @@ def api_humanize():
     except Exception as e:
         app.logger.warning("naive_bt candidate failed: %s", e)
 
-    # adversarial (internally also calls /paraphrase + /detect)
-    try:
-        candidates["adversarial"] = AdversarialLoop().humanize(text)
-    except Exception as e:
-        app.logger.warning("adversarial candidate failed: %s", e)
+    # Temporarily disable the adversarial path during deployment until the Modal
+    # backend is stable. Keep the humanize flow to the simpler paraphrase and
+    # backtranslate routes for now.
+    # try:
+    #     candidates["adversarial"] = AdversarialLoop().humanize(text)
+    # except Exception as e:
+    #     app.logger.warning("adversarial candidate failed: %s", e)
 
     if not candidates:
         return jsonify({
