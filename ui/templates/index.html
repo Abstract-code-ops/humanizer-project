@@ -1,0 +1,102 @@
+{% extends "_base.html" %}
+{% block title %}Humanize — Humanizer Bench{% endblock %}
+{% block content %}
+
+  <section class="hero">
+    <h1>Rewrite AI text so it reads human.</h1>
+    <p class="subhead">Paste your draft and get back a version that reads naturally.</p>
+
+    <div class="mode-pills">
+      <a href="/" class="pill pill-active">Humanize</a>
+      <a href="/detect" class="pill">Check for AI <span aria-hidden="true">&rarr;</span></a>
+    </div>
+
+    <div class="paste-box">
+      <textarea id="input-text" placeholder="Paste your AI-generated text here…" aria-label="Text to humanize"></textarea>
+      <div class="paste-box-footer">
+        <span class="word-counter" id="word-counter" title="Longer inputs are truncated to the first {{ word_cap }} words before processing.">0 / {{ word_cap }} words</span>
+      </div>
+      <div class="utility-row">
+        <button class="btn" id="btn-paste" type="button">Paste</button>
+        <button class="btn" id="btn-clear" type="button">Clear</button>
+        <button class="btn" id="btn-sample" type="button">Sample text</button>
+        <button class="btn btn-primary" id="btn-humanize" type="button" disabled>Humanize</button>
+      </div>
+    </div>
+
+    <div class="result-panel" id="result-panel">
+      <div class="result-grid">
+        <div class="gauge-wrap">
+          <svg id="gauge" width="120" height="120" viewBox="0 0 120 120">
+            <circle cx="60" cy="60" r="50" fill="none" stroke="var(--border)" stroke-width="10"/>
+            <circle id="gauge-arc" cx="60" cy="60" r="50" fill="none" stroke="var(--success)"
+                    stroke-width="10" stroke-linecap="round"
+                    stroke-dasharray="314.159" stroke-dashoffset="314.159"
+                    transform="rotate(-90 60 60)"/>
+            <text id="gauge-value" x="60" y="66" text-anchor="middle"
+                  font-family="var(--font-mono)" font-size="22" fill="var(--text)">–</text>
+          </svg>
+          <p class="gauge-caption">Scored against our AI detector.</p>
+        </div>
+        <div class="stat-rows">
+          <div class="stat-row">
+            <span class="stat-label">Similarity to original</span>
+            <span class="stat-value" id="stat-similarity">–</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Readability</span>
+            <span class="stat-value" id="stat-readability">–</span>
+          </div>
+        </div>
+      </div>
+      <div class="rewritten-box">
+        <div class="rewritten-text" id="rewritten-text"></div>
+        <button class="btn copy-btn" id="btn-copy" type="button">Copy</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="why-section">
+    <h2>Why use our humanizer</h2>
+    <p class="why-lede">Our humanizer smooths out AI-drafted text so it reads naturally, without changing what you're actually trying to say.</p>
+    <div class="why-grid">
+      <div class="why-item">
+        <h3>Keeps your meaning</h3>
+        <p>A similarity check runs alongside every rewrite, so the result stays close to your original wording.</p>
+      </div>
+      <div class="why-item">
+        <h3>Reads naturally</h3>
+        <p>Smooths out the repeated phrasing and stiff sentence patterns that tend to give AI drafts away.</p>
+      </div>
+      <div class="why-item">
+        <h3>Free, no sign-up</h3>
+        <p>Paste your text and go — nothing to install, no account, no per-use limit.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Loading modal -->
+  <div class="modal-backdrop" id="modal-backdrop">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-label" id="modal">
+      <div class="spinner" id="modal-spinner"></div>
+      <p class="modal-label" id="modal-label">Humanizing…</p>
+      <p class="modal-caption" id="modal-caption"></p>
+
+      <div class="detector-row" id="detector-row" hidden>
+        <span class="detector-chip" data-detector="gptzero">GPTZero</span>
+        <span class="detector-chip" data-detector="turnitin">Turnitin</span>
+        <span class="detector-chip" data-detector="originality">Originality.ai</span>
+        <span class="detector-chip" data-detector="copyleaks">Copyleaks</span>
+        <span class="detector-chip" data-detector="winston">Winston AI</span>
+        <span class="detector-chip" data-detector="zerogpt">ZeroGPT</span>
+      </div>
+      <p class="modal-simulated-tag" id="modal-simulated-tag" hidden>Modeled after what detectors like these tend to look for — simulated, not a live multi-tool test.</p>
+      <p class="modal-error" id="modal-error" hidden></p>
+    </div>
+  </div>
+
+{% endblock %}
+{% block scripts %}
+<script>window.WORD_CAP = {{ word_cap }};</script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% endblock %}

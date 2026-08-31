@@ -1,0 +1,84 @@
+# Single source of truth for experiment parameters.
+# No API keys here — those live in .env (gitignored).
+
+source_texts:
+  - id: writer_voice
+    path: data/source_texts/writer_voice.txt
+    origin: human
+  - id: china_expansion
+    path: data/source_texts/china_expansion.txt
+    origin: human
+  - id: age_of_exploration
+    path: data/source_texts/age_of_exploration.txt
+    origin: ai
+  - id: pigeon
+    path: data/source_texts/pigeon.txt
+    origin: ai
+  - id: mycelium
+    path: data/source_texts/mycelium.txt
+    origin: ai
+  - id: beaver
+    path: data/source_texts/beaver.txt
+    origin: ai
+
+tiers:
+  - baseline
+  - naive
+  - naive_bt
+  - paraphrase
+  - paraphrase_llm
+  - adversarial
+  - skill_gemini
+  - skill_deepseek
+
+# Detector used for all proxy_score values / adversarial loop reward.
+detector:
+  model: "desklib/ai-text-detector-v1.01"   # primary, RAID-tuned
+  secondary_model: "TrustSafeAI/RADAR-Vicuna-7B"  # available, not used for proxy_score
+  provider: hf   # served on Modal
+
+# Similarity method: "embeddings" (MiniLM via Modal) or "lexical" (fallback, no network)
+similarity:
+  method: embeddings
+  model: "sentence-transformers/all-MiniLM-L6-v2"
+
+readability:
+  method: flesch_reading_ease
+
+naive:
+  substitution_rate: 0.15
+  seed: null   # null = non-deterministic; set an int for reproducible runs
+
+naive_bt:
+  pivot_language: fr   # single French pivot
+
+paraphrase:
+  model: "Vamsi/T5_Paraphrase_Paws"
+  default_strength: 3   # 1-5
+
+paraphrase_llm:
+  provider: gemini
+  model: "gemini-3.1-flash-lite"
+  prompt: "Rewrite the following text so it sounds human-written. Preserve the original meaning and approximate length. Do not add commentary, only output the rewritten text.\n\nText:\n{text}"
+
+adversarial:
+  strength_sweep: [1, 2, 3, 4, 5]
+  target_proxy_score: 0.30   # stop early once a candidate is <= this
+  max_iters: 5
+
+skill_humanizer:
+  skill_path: "skills/humanizer/SKILL.md"
+  providers:
+    skill_gemini:
+      provider: gemini
+      model: "gemini-3.1-flash-lite"
+    skill_deepseek:
+      provider: deepseek
+      model: "deepseek-chat"
+
+humanize_best_of:
+  # Tiers used by the primary "Humanize" UI action (3-way best-of).
+  candidates: [paraphrase, naive_bt, adversarial]
+  word_cap: 200
+
+results_csv: data/results.csv

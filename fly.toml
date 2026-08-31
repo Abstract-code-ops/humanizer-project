@@ -1,0 +1,25 @@
+# Generated for the Humanizer Bench Flask UI.
+# Set secrets before first deploy:
+#   fly secrets set MODAL_DETECT_URL=... MODAL_PARAPHRASE_URL=... \
+#     MODAL_EMBED_URL=... MODAL_BACKTRANSLATE_URL=... MODAL_HEALTH_URL=... \
+#     GEMINI_API_KEY=... PROXY_PROVIDER=hf
+
+app = "humanizer-bench"          # rename to whatever fly launch assigns
+primary_region = "fra"           # pick the region closest to you
+
+[build]
+
+[env]
+  PORT = "8080"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = false     # keep this off so it doesn't behave like Render's sleep tier
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256

@@ -1,0 +1,7 @@
+flask>=3.0
+gunicorn>=22.0
+requests>=2.31
+python-dotenv>=1.0
+nltk>=3.9
+pyyaml>=6.0
+textstat>=0.7

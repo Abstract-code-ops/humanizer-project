@@ -1,0 +1,92 @@
+{% extends "_base.html" %}
+{% block title %}Detect — Humanizer Bench{% endblock %}
+{% block content %}
+
+  <section class="hero hero-narrow">
+    <h1>Free AI Checker &amp; Detector</h1>
+    <p class="subhead">Paste your text and see how likely it is to read as AI-written.</p>
+
+    <div class="mode-pills">
+      <a href="/detect" class="pill pill-active">Check for AI</a>
+      <a href="/" class="pill">Humanize <span aria-hidden="true">&rarr;</span></a>
+    </div>
+
+    <div class="paste-box">
+      <textarea id="detect-input" rows="10" placeholder="Paste your text here (at least 30 words)…" aria-label="Text to check"></textarea>
+      <div class="utility-row">
+        <button class="btn" id="detect-btn-sample" type="button">Try a sample</button>
+        <button class="btn" id="detect-btn-paste" type="button">Paste here</button>
+        <button class="btn btn-primary" id="detect-btn" type="button">Check for AI</button>
+      </div>
+      <p class="status" id="detect-status"></p>
+    </div>
+
+    <div id="detect-result" class="detect-panel hidden">
+
+      <div class="verdict-grid">
+        <div class="gauge-wrap">
+          <svg id="detect-gauge-svg" width="150" height="90" viewBox="0 0 150 90">
+            <path d="M 10 80 A 65 65 0 0 1 140 80" fill="none" stroke="var(--border)" stroke-width="14" stroke-linecap="round"/>
+            <path id="detect-gauge-arc" d="M 10 80 A 65 65 0 0 1 140 80" fill="none" stroke="var(--danger)"
+                  stroke-width="14" stroke-linecap="round"
+                  stroke-dasharray="204.2" stroke-dashoffset="204.2"/>
+          </svg>
+          <div class="gauge-center">
+            <span id="detect-score-big">–</span>
+            <small>AI score</small>
+          </div>
+        </div>
+        <div class="verdict-legend">
+          <div class="legend-row">
+            <span class="legend-dot dot-ai"></span> AI-generated
+            <span class="legend-value" id="legend-ai">–</span>
+          </div>
+          <div class="legend-row">
+            <span class="legend-dot dot-human"></span> Human-written
+            <span class="legend-value" id="legend-human">–</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="verdict-box">
+        <p class="verdict-heading">What we looked at</p>
+        <ul class="verdict-list">
+          <li>Sentence rhythm and structure</li>
+          <li>Repetition and predictability of phrasing</li>
+          <li>Vocabulary variety and word choice</li>
+        </ul>
+      </div>
+
+      <div class="also-checked">
+        <p class="also-checked-heading">Also checked with</p>
+        <div class="detector-row detector-row-static">
+          <span class="detector-chip done" data-detector="gptzero">GPTZero</span>
+          <span class="detector-chip done" data-detector="turnitin">Turnitin</span>
+          <span class="detector-chip done" data-detector="originality">Originality.ai</span>
+          <span class="detector-chip done" data-detector="copyleaks">Copyleaks</span>
+          <span class="detector-chip done" data-detector="winston">Winston AI</span>
+          <span class="detector-chip done" data-detector="zerogpt">ZeroGPT</span>
+        </div>
+        <p class="modal-simulated-tag">Illustrative — not a live multi-tool test.</p>
+      </div>
+
+      <div class="model-breakdown">
+        <p class="also-checked-heading">Model breakdown</p>
+        <div class="model-grid" id="model-breakdown-grid">
+          <div class="model-row"><span class="model-name">ChatGPT</span><span class="model-value" data-model="chatgpt">–</span></div>
+          <div class="model-row"><span class="model-name">Claude</span><span class="model-value" data-model="claude">–</span></div>
+          <div class="model-row"><span class="model-name">Gemini</span><span class="model-value" data-model="gemini">–</span></div>
+          <div class="model-row"><span class="model-name">xAI Grok</span><span class="model-value" data-model="grok">–</span></div>
+          <div class="model-row"><span class="model-name">DeepSeek</span><span class="model-value" data-model="deepseek">–</span></div>
+        </div>
+        <p class="modal-simulated-tag">Illustrative breakdown, for demo purposes.</p>
+      </div>
+
+      <button class="btn export-btn" id="detect-export-btn" type="button">Export report</button>
+    </div>
+  </section>
+
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/detect.js') }}"></script>
+{% endblock %}

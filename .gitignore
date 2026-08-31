@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+package-lock.json
+data/results.pre-restructure-backup.csv
+.DS_Store
