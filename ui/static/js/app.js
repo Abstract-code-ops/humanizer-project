@@ -37,11 +37,20 @@
     return trimmed.length ? trimmed.split(/\s+/).length : 0;
   }
 
+  function hasOverlongToken(text) {
+    return /[A-Za-z0-9]{16,}/.test(text);
+  }
+
   function updateCounter() {
     var n = wordCount(input.value);
+    var overLongToken = hasOverlongToken(input.value);
+    var overLimit = n > WORD_LIMIT || overLongToken;
     counter.textContent = n + ' / ' + WORD_LIMIT + ' words';
-    counter.classList.toggle('over-limit', n > WORD_LIMIT);
-    btnHumanize.disabled = input.value.trim().length === 0;
+    counter.classList.toggle('over-limit', overLimit);
+    counter.title = overLongToken
+      ? 'Input contains a token longer than 15 characters.'
+      : (n > WORD_LIMIT ? 'Input exceeds the limit. Shorten it before sending.' : 'Input exceeds the limit. Shorten it before sending.');
+    btnHumanize.disabled = input.value.trim().length === 0 || overLimit;
   }
 
   input.addEventListener('input', updateCounter);
@@ -209,8 +218,14 @@
   // ---------------- Humanize flow ----------------
 
   btnHumanize.addEventListener('click', function () {
-    var text = truncateToLimit(input.value);
-    if (!text.trim()) return;
+    var text = input.value.trim();
+    if (!text) return;
+    if (wordCount(text) > WORD_LIMIT || hasOverlongToken(text)) {
+      counter.classList.add('over-limit');
+      counter.title = 'Input exceeds the limit. Shorten it before sending.';
+      setStageError('Input exceeds the ' + WORD_LIMIT + '-word limit or contains a token longer than 15 characters. Please shorten it before sending.');
+      return;
+    }
 
     openModal();
 

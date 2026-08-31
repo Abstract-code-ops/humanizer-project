@@ -23,5 +23,10 @@ def cap_words(text: str, max_words: int = 200) -> str:
     return " ".join(words[:max_words])
 
 
+def has_overlong_token(text: str, max_token_length: int = 15) -> bool:
+    """Return True if any word token exceeds the configured max length."""
+    return any(len(token) > max_token_length for token in re.findall(r"\w+", text))
+
+
 def word_count(text: str) -> int:
     return len(text.split())

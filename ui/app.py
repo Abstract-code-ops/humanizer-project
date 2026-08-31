@@ -16,7 +16,7 @@ from flask import Flask, jsonify, render_template, request
 from config import load_config
 from humanizers import baseline, naive, naive_bt, paraphrase
 from humanizers.adversarial_loop import AdversarialLoop
-from humanizers._shared import cap_words, word_count
+from humanizers._shared import cap_words, has_overlong_token, word_count
 from detectors import proxy as proxy_detector
 from evaluation import similarity as similarity_eval
 from evaluation import readability as readability_eval
@@ -58,7 +58,12 @@ def api_humanize():
     cfg = load_config()
     word_cap = cfg["humanize_best_of"]["word_cap"]
 
-    text = cap_words(raw_text, max_words=word_cap)
+    if word_count(raw_text) > word_cap or has_overlong_token(raw_text, max_token_length=15):
+        return jsonify({
+            "error": "Input exceeds the 200-word limit or contains a token longer than 15 characters. Please shorten it before submitting."
+        }), 400
+
+    text = raw_text
     if not text.strip():
         return jsonify({"error": "empty input"}), 400
 

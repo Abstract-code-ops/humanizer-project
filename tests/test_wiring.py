@@ -4,7 +4,8 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from humanizers import baseline
-from humanizers._shared import cap_words, split_sentences, word_count
+from humanizers._shared import cap_words, has_overlong_token, split_sentences, word_count
+from ui.app import app
 
 
 def test_baseline_passthrough():
@@ -31,3 +32,23 @@ def test_split_sentences_basic():
 def test_word_count():
     assert word_count("a b c") == 3
     assert word_count("") == 0
+
+
+def test_has_overlong_token():
+    assert has_overlong_token("short words here") is False
+    assert has_overlong_token("supercalifragilistic") is True
+
+
+def test_api_humanize_rejects_input_over_word_limit():
+    client = app.test_client()
+    text = " ".join(f"w{i}" for i in range(201))
+    resp = client.post("/api/humanize", json={"text": text})
+    assert resp.status_code == 400
+    assert "word limit" in resp.get_json()["error"].lower()
+
+
+def test_api_humanize_rejects_input_with_long_token():
+    client = app.test_client()
+    resp = client.post("/api/humanize", json={"text": "supercalifragilistic"})
+    assert resp.status_code == 400
+    assert "15 characters" in resp.get_json()["error"]
