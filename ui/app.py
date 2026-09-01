@@ -85,13 +85,18 @@ def api_humanize():
     except Exception as e:
         app.logger.warning("naive_bt candidate failed: %s", e)
 
-    # Temporarily disable the adversarial path during deployment until the Modal
-    # backend is stable. Keep the humanize flow to the simpler paraphrase and
-    # backtranslate routes for now.
-    # try:
-    #     candidates["adversarial"] = AdversarialLoop().humanize(text)
-    # except Exception as e:
-    #     app.logger.warning("adversarial candidate failed: %s", e)
+    # Adversarial — re-enabled now that the Modal backend runs the whole
+    # rewrite -> detect -> repeat loop server-side in a single call (see
+    # deploy/modal_app.py's Adversarial class, POST /adversarial) instead of
+    # AdversarialLoop making one HTTP round trip per iteration. If
+    # AdversarialLoop.humanize() still loops client-side over the old
+    # per-step endpoints internally, it needs to be pointed at
+    # MODAL_ADVERSARIAL_URL and reduced to a single request — share
+    # humanizers/adversarial_loop.py if you want that rewritten too.
+    try:
+        candidates["adversarial"] = AdversarialLoop().humanize(text)
+    except Exception as e:
+        app.logger.warning("adversarial candidate failed: %s", e)
 
     if not candidates:
         return jsonify({
@@ -201,4 +206,14 @@ def _score_and_record(sample_id: str, tier: str, proxy_score: float,
 
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    # threaded=True matters here, not just for perf: with the default
+    # single-threaded dev server, a slow /api/humanize or /api/detect call
+    # (blocked on requests.post() to Modal for many seconds) makes the
+    # *entire server* unresponsive to any other request — including a
+    # simple page refresh (GET /), which is why a refresh mid-request looked
+    # like a hung white screen: it wasn't stuck, it was queued behind the
+    # in-flight request with nowhere to go until that one finished. This
+    # doesn't cancel the in-flight Modal call itself (see notes in
+    # docs/decision-log.md on that) — it just stops one slow request from
+    # blocking every other request, including page loads.
+    app.run(debug=True, host="0.0.0.0", port=5000, threaded=True)
