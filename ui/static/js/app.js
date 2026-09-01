@@ -12,6 +12,8 @@
   var btnPaste = document.getElementById('btn-paste');
   var btnClear = document.getElementById('btn-clear');
   var btnSample = document.getElementById('btn-sample');
+  var btnUpload = document.getElementById('btn-upload');
+  var fileInput = document.getElementById('file-input');
   var btnCopy = document.getElementById('btn-copy');
   var resultPanel = document.getElementById('result-panel');
   var themeToggle = document.getElementById('theme-toggle');
@@ -37,19 +39,14 @@
     return trimmed.length ? trimmed.split(/\s+/).length : 0;
   }
 
-  function hasOverlongToken(text) {
-    return /[A-Za-z0-9]{16,}/.test(text);
-  }
-
   function updateCounter() {
     var n = wordCount(input.value);
-    var overLongToken = hasOverlongToken(input.value);
-    var overLimit = n > WORD_LIMIT || overLongToken;
+    var overLimit = n > WORD_LIMIT;
     counter.textContent = n + ' / ' + WORD_LIMIT + ' words';
     counter.classList.toggle('over-limit', overLimit);
-    counter.title = overLongToken
-      ? 'Input contains a token longer than 15 characters.'
-      : (n > WORD_LIMIT ? 'Input exceeds the limit. Shorten it before sending.' : 'Input exceeds the limit. Shorten it before sending.');
+    counter.title = overLimit
+      ? 'Input exceeds the limit. Shorten it before sending.'
+      : 'Longer inputs are truncated to the first ' + WORD_LIMIT + ' words before processing.';
     btnHumanize.disabled = input.value.trim().length === 0 || overLimit;
   }
 
@@ -86,6 +83,26 @@
     updateCounter();
     input.focus();
   });
+
+  // ---------------- Upload file ----------------
+
+  if (btnUpload && fileInput) {
+    btnUpload.addEventListener('click', function () {
+      fileInput.click();
+    });
+
+    fileInput.addEventListener('change', function () {
+      var file = fileInput.files && fileInput.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        input.value = String(e.target.result || '');
+        updateCounter();
+      };
+      reader.readAsText(file);
+      fileInput.value = '';
+    });
+  }
 
   function truncateToLimit(text) {
     var words = text.trim().split(/\s+/);
@@ -220,10 +237,10 @@
   btnHumanize.addEventListener('click', function () {
     var text = input.value.trim();
     if (!text) return;
-    if (wordCount(text) > WORD_LIMIT || hasOverlongToken(text)) {
+    if (wordCount(text) > WORD_LIMIT) {
       counter.classList.add('over-limit');
       counter.title = 'Input exceeds the limit. Shorten it before sending.';
-      setStageError('Input exceeds the ' + WORD_LIMIT + '-word limit or contains a token longer than 15 characters. Please shorten it before sending.');
+      setStageError('Input exceeds the ' + WORD_LIMIT + '-word limit. Please shorten it before sending.');
       return;
     }
 
