@@ -17,9 +17,23 @@
         <span class="word-counter" id="word-counter" title="Longer inputs are truncated to the first {{ word_cap }} words before processing.">0 / {{ word_cap }} words</span>
       </div>
       <div class="utility-row">
-        <button class="btn" id="btn-paste" type="button">Paste</button>
-        <button class="btn" id="btn-clear" type="button">Clear</button>
-        <button class="btn" id="btn-sample" type="button">Sample text</button>
+        <button class="btn" id="btn-paste" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
+          Paste
+        </button>
+        <button class="btn" id="btn-clear" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>
+          Clear
+        </button>
+        <button class="btn" id="btn-sample" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v3m0 12v3m9-9h-3M6 12H3m14.4-6.4-2.1 2.1M8.7 15.3l-2.1 2.1m0-10.8 2.1 2.1m8.7 8.7 2.1 2.1"/></svg>
+          Sample text
+        </button>
+        <button class="btn" id="btn-upload" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0-12 4 4m-4-4-4 4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+          Upload file
+        </button>
+        <input type="file" id="file-input" class="file-input-hidden" accept=".txt,.md,text/plain">
         <button class="btn btn-primary" id="btn-humanize" type="button" disabled>Humanize</button>
       </div>
     </div>
@@ -72,6 +86,112 @@
         <h3>Free, no sign-up</h3>
         <p>Paste your text and go — nothing to install, no account, no per-use limit.</p>
       </div>
+    </div>
+  </section>
+
+  <section class="info-section">
+    <h2>How to use our humanizer</h2>
+    <p class="info-lede">Four steps from a rough AI draft to something that reads like you wrote it.</p>
+    <div class="step-list">
+      <div class="step-item">
+        <span class="step-number">1</span>
+        <div class="step-body">
+          <h3>Paste or upload your draft</h3>
+          <p>Drop AI-generated text into the box above, or use "Upload file" / "Sample text" to try it instantly. Inputs are capped at {{ word_cap }} words per run.</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <span class="step-number">2</span>
+        <div class="step-body">
+          <h3>Click Humanize</h3>
+          <p>We run your text through several rewriting passes and keep the version that reads most naturally, benchmarked against our detector.</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <span class="step-number">3</span>
+        <div class="step-body">
+          <h3>Check the score and similarity</h3>
+          <p>Review the AI-likeness gauge, similarity-to-original percentage, and readability rating before you decide what to keep.</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <span class="step-number">4</span>
+        <div class="step-body">
+          <h3>Copy and edit as needed</h3>
+          <p>Use "Copy" to grab the rewritten text, then give it a final read-through — it's a starting point, not a final draft.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="info-section">
+    <h2>Who it's for</h2>
+    <p class="info-lede">Anyone who drafts with AI assistance and wants the output to read a little more like them.</p>
+    <div class="audience-grid">
+      <div class="audience-card">
+        <h3>Students</h3>
+        <p>Reviewing AI-assisted study notes or outlines before turning them into their own original work.</p>
+      </div>
+      <div class="audience-card">
+        <h3>Content writers</h3>
+        <p>Smoothing first-pass drafts so blog posts and articles read less mechanically.</p>
+      </div>
+      <div class="audience-card">
+        <h3>Marketers</h3>
+        <p>Polishing AI-generated copy for emails, product pages, and social captions.</p>
+      </div>
+      <div class="audience-card">
+        <h3>Non-native English speakers</h3>
+        <p>Refining sentence flow and word choice in text drafted with AI help.</p>
+      </div>
+      <div class="audience-card">
+        <h3>Researchers</h3>
+        <p>Benchmarking how different rewriting strategies perform against AI detectors.</p>
+      </div>
+      <div class="audience-card">
+        <h3>Bloggers &amp; creators</h3>
+        <p>Giving AI-brainstormed drafts a more personal, conversational voice.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="info-section">
+    <h2>Common uses of a humanizer</h2>
+    <p class="info-lede">What people typically use a tool like this for.</p>
+    <ul class="uses-list">
+      <li>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m20 6-11 11-5-5"/></svg>
+        Smoothing repetitive or robotic-sounding phrasing
+      </li>
+      <li>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m20 6-11 11-5-5"/></svg>
+        Improving clarity, tone, and sentence variety
+      </li>
+      <li>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m20 6-11 11-5-5"/></svg>
+        Preparing an AI-assisted draft for human review and editing
+      </li>
+      <li>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m20 6-11 11-5-5"/></svg>
+        Benchmarking rewriting strategies against AI detectors
+      </li>
+      <li>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m20 6-11 11-5-5"/></svg>
+        Making marketing and content copy sound less templated
+      </li>
+      <li>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m20 6-11 11-5-5"/></svg>
+        Studying how paraphrasing affects detector scores and readability
+      </li>
+    </ul>
+
+    <div class="caveat-box">
+      <p class="caveat-label">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+        Ownership &amp; academic-integrity notice
+      </p>
+      <p>This humanizer is developed and owned by <strong>Near East University</strong>, as part of an academic benchmarking project studying AI-text detection and rewriting quality. It is provided for research and educational purposes only.</p>
+      <p>This tool must not be used to facilitate academic dishonesty, plagiarism, or misrepresenting authorship of submitted work. Results are illustrative writing-quality insights, not a guarantee against detection.</p>
     </div>
   </section>
 
