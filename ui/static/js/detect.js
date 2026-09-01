@@ -19,6 +19,15 @@
   var alsoCheckedToggle = document.getElementById('also-checked-toggle');
   var detectorList = document.getElementById('detector-list');
 
+  var verdictGrid = document.getElementById('verdict-grid');
+  var verdictBox = document.getElementById('verdict-box');
+  var verdictListEl = document.getElementById('verdict-list');
+  var alsoCheckedSection = document.getElementById('also-checked-section');
+  var modelBreakdownSection = document.getElementById('model-breakdown-section');
+  var footnote = document.getElementById('detect-footnote');
+
+  var prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
   // Full-circle gauge: circumference = 2 * PI * r (r = 60, matches the SVG markup)
   var ARC_LENGTH = 2 * Math.PI * 60;
 
@@ -126,14 +135,6 @@
     if (aiPct >= 60) arcColor = 'var(--danger)';
     else if (aiPct >= 30) arcColor = 'var(--mixed)';
 
-    arc.setAttribute('stroke', arcColor);
-    arc.setAttribute('stroke-dasharray', ARC_LENGTH);
-    arc.setAttribute('stroke-dashoffset', ARC_LENGTH * (1 - aiPct / 100));
-    scoreBig.textContent = aiPct + '%';
-    legendAi.textContent = aiPct + '%';
-    legendMixed.textContent = split.mixedPct + '%';
-    legendHuman.textContent = split.humanPct + '%';
-
     var breakdown = fakeModelBreakdown(aiPct);
     Object.keys(breakdown).forEach(function (model) {
       var el = document.querySelector('[data-model="' + model + '"]');
@@ -141,6 +142,113 @@
     });
 
     resultPanel.classList.remove('hidden');
+    playRevealSequence(aiPct, split, arcColor);
+  }
+
+  // ---------------- Reveal sequence ----------------
+  // 1. Verdict grid fades in; gauge + legend numbers count up from 0 together.
+  // 2. "What we looked at" box fades in, then its bullets appear one by one.
+  // 3. Remaining sections cascade in, ~500ms apart.
+
+  var GAUGE_DURATION = prefersReducedMotion ? 0 : 900;
+  var BULLET_STAGGER = prefersReducedMotion ? 0 : 300;
+  var SECTION_STAGGER = prefersReducedMotion ? 0 : 500;
+
+  var revealFadeSections = [verdictGrid, verdictBox, alsoCheckedSection, modelBreakdownSection, exportBtn, footnote];
+  var bulletItems = verdictListEl ? Array.prototype.slice.call(verdictListEl.querySelectorAll('.bullet-item')) : [];
+
+  function resetRevealState() {
+    revealFadeSections.forEach(function (el) {
+      if (el) el.classList.remove('visible');
+    });
+    bulletItems.forEach(function (li) { li.classList.remove('visible'); });
+    scoreBig.textContent = '0%';
+    legendAi.textContent = '0%';
+    legendMixed.textContent = '0%';
+    legendHuman.textContent = '0%';
+    arc.setAttribute('stroke-dasharray', ARC_LENGTH);
+    arc.setAttribute('stroke-dashoffset', ARC_LENGTH);
+  }
+
+  function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+
+  function animateGaugeAndLegend(aiPct, split, arcColor, duration, onDone) {
+    arc.setAttribute('stroke', arcColor);
+    if (duration <= 0) {
+      arc.setAttribute('stroke-dashoffset', ARC_LENGTH * (1 - aiPct / 100));
+      scoreBig.textContent = aiPct + '%';
+      legendAi.textContent = aiPct + '%';
+      legendMixed.textContent = split.mixedPct + '%';
+      legendHuman.textContent = split.humanPct + '%';
+      if (onDone) onDone();
+      return;
+    }
+    var start = null;
+    function step(timestamp) {
+      if (start === null) start = timestamp;
+      var elapsed = timestamp - start;
+      var progress = Math.min(1, elapsed / duration);
+      var eased = easeOutCubic(progress);
+
+      var curAi = Math.round(aiPct * eased);
+      var curMixed = Math.round(split.mixedPct * eased);
+      var curHuman = Math.round(split.humanPct * eased);
+
+      arc.setAttribute('stroke-dashoffset', ARC_LENGTH * (1 - (aiPct * eased) / 100));
+      scoreBig.textContent = curAi + '%';
+      legendAi.textContent = curAi + '%';
+      legendMixed.textContent = curMixed + '%';
+      legendHuman.textContent = curHuman + '%';
+
+      if (progress < 1) {
+        requestAnimationFrame(step);
+      } else {
+        // Snap to exact final values to avoid rounding drift.
+        arc.setAttribute('stroke-dashoffset', ARC_LENGTH * (1 - aiPct / 100));
+        scoreBig.textContent = aiPct + '%';
+        legendAi.textContent = aiPct + '%';
+        legendMixed.textContent = split.mixedPct + '%';
+        legendHuman.textContent = split.humanPct + '%';
+        if (onDone) onDone();
+      }
+    }
+    requestAnimationFrame(step);
+  }
+
+  function revealBulletsSequentially(items, stagger, onDone) {
+    if (!items.length) { if (onDone) onDone(); return; }
+    items.forEach(function (li, i) {
+      setTimeout(function () {
+        li.classList.add('visible');
+        if (i === items.length - 1 && onDone) {
+          setTimeout(onDone, 400);
+        }
+      }, i * stagger);
+    });
+  }
+
+  function playRevealSequence(aiPct, split, arcColor) {
+    resetRevealState();
+
+    // Step 1 — verdict grid fades in; gauge + legend count up together.
+    if (verdictGrid) verdictGrid.classList.add('visible');
+    animateGaugeAndLegend(aiPct, split, arcColor, GAUGE_DURATION, function () {
+
+      // Step 2 — "what we looked at" box fades in, then bullets cascade.
+      if (verdictBox) verdictBox.classList.add('visible');
+      setTimeout(function () {
+        revealBulletsSequentially(bulletItems, BULLET_STAGGER, function () {
+
+          // Step 3 — remaining sections cascade in, ~500ms apart.
+          var rest = [alsoCheckedSection, modelBreakdownSection, exportBtn, footnote];
+          rest.forEach(function (el, i) {
+            setTimeout(function () {
+              if (el) el.classList.add('visible');
+            }, i * SECTION_STAGGER);
+          });
+        });
+      }, prefersReducedMotion ? 0 : 150);
+    });
   }
 
   btnDetect.addEventListener('click', function () {
