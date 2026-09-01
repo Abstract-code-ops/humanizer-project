@@ -39,7 +39,7 @@
 
     <div id="detect-result" class="detect-panel hidden">
 
-      <div class="verdict-grid">
+      <div class="verdict-grid fade-section" id="verdict-grid">
         <div class="gauge-wrap">
           <svg id="detect-gauge-svg" width="150" height="150" viewBox="0 0 150 150">
             <circle cx="75" cy="75" r="60" fill="none" stroke="var(--border)" stroke-width="14"/>
@@ -69,21 +69,21 @@
         </div>
       </div>
 
-      <div class="verdict-box">
+      <div class="verdict-box fade-section" id="verdict-box">
         <div class="verdict-heading-row">
           <span class="icon-badge">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-2 1.8-2 3.3M12 17h.01"/></svg>
           </span>
           <p class="verdict-heading">What we looked at</p>
         </div>
-        <ul class="verdict-list">
-          <li>Sentence rhythm and structure</li>
-          <li>Repetition and predictability of phrasing</li>
-          <li>Vocabulary variety and word choice</li>
+        <ul class="verdict-list" id="verdict-list">
+          <li class="bullet-item">Sentence rhythm and structure</li>
+          <li class="bullet-item">Repetition and predictability of phrasing</li>
+          <li class="bullet-item">Vocabulary variety and word choice</li>
         </ul>
       </div>
 
-      <div class="also-checked">
+      <div class="also-checked fade-section" id="also-checked-section">
         <div class="also-checked-toggle-row">
           <p class="also-checked-heading">Also checked with</p>
           <span class="also-checked-count" id="also-checked-count">+4</span>
@@ -102,7 +102,7 @@
         <p class="modal-simulated-tag-small">Illustrative — not a live multi-tool test.</p>
       </div>
 
-      <div class="model-breakdown">
+      <div class="model-breakdown fade-section" id="model-breakdown-section">
         <p class="also-checked-heading">
           AI model breakdown
           <span class="info-icon-inline" title="Simulated per-model scores for demo purposes.">i</span>
@@ -117,12 +117,12 @@
         <p class="modal-simulated-tag-small">Illustrative breakdown, for demo purposes.</p>
       </div>
 
-      <button class="btn export-btn" id="detect-export-btn" type="button">
+      <button class="btn export-btn fade-section" id="detect-export-btn" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15V3m0 12-4-4m4 4 4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
         Export PDF report
       </button>
 
-      <p class="detect-footnote">This checker provides writing-style insights for clarity, tone, and pattern analysis. Results are illustrative and must not be used as sole grounds for allegations of academic dishonesty, plagiarism, or misleading submissions.</p>
+      <p class="detect-footnote fade-section" id="detect-footnote">This checker provides writing-style insights for clarity, tone, and pattern analysis. Results are illustrative and must not be used as sole grounds for allegations of academic dishonesty, plagiarism, or misleading submissions.</p>
     </div>
   </section>
 
