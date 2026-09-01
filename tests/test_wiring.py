@@ -36,7 +36,7 @@ def test_word_count():
 
 def test_has_overlong_token():
     assert has_overlong_token("short words here") is False
-    assert has_overlong_token("supercalifragilistic") is True
+    assert has_overlong_token("supercalifragilisticly") is True
     assert has_overlong_token("abcdefghij") is False
 
 
@@ -50,6 +50,6 @@ def test_api_humanize_rejects_input_over_word_limit():
 
 def test_api_humanize_rejects_input_with_long_token():
     client = app.test_client()
-    resp = client.post("/api/humanize", json={"text": "supercalifragilistic"})
+    resp = client.post("/api/humanize", json={"text": "supercalifragilisticly"})
     assert resp.status_code == 400
-    assert "10 characters" in resp.get_json()["error"]
+    assert "20 characters" in resp.get_json()["error"]

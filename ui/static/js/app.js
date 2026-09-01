@@ -39,15 +39,22 @@
     return trimmed.length ? trimmed.split(/\s+/).length : 0;
   }
 
+  function hasOverlongToken(text) {
+    return /\w{21,}/.test(text);
+  }
+
   function updateCounter() {
     var n = wordCount(input.value);
     var overLimit = n > WORD_LIMIT;
+    var overlongToken = hasOverlongToken(input.value);
     counter.textContent = n + ' / ' + WORD_LIMIT + ' words';
-    counter.classList.toggle('over-limit', overLimit);
+    counter.classList.toggle('over-limit', overLimit || overlongToken);
     counter.title = overLimit
       ? 'Input exceeds the limit. Shorten it before sending.'
-      : 'Longer inputs are truncated to the first ' + WORD_LIMIT + ' words before processing.';
-    btnHumanize.disabled = input.value.trim().length === 0 || overLimit;
+      : overlongToken
+        ? 'Input contains a token longer than 20 characters. Shorten it before sending.'
+        : 'Longer inputs are truncated to the first ' + WORD_LIMIT + ' words before processing.';
+    btnHumanize.disabled = input.value.trim().length === 0 || overLimit || overlongToken;
   }
 
   input.addEventListener('input', updateCounter);
@@ -243,6 +250,12 @@
       setStageError('Input exceeds the ' + WORD_LIMIT + '-word limit. Please shorten it before sending.');
       return;
     }
+    if (hasOverlongToken(text)) {
+      counter.classList.add('over-limit');
+      counter.title = 'Input contains a token longer than 20 characters. Shorten it before sending.';
+      setStageError('Input contains a token longer than 20 characters. Please shorten it before sending.');
+      return;
+    }
 
     openModal();
 
@@ -252,7 +265,13 @@
       body: JSON.stringify({ text: text })
     })
       .then(function (res) {
-        if (!res.ok) throw new Error('Request failed (' + res.status + ')');
+        if (!res.ok) {
+          return res.json().then(function (data) {
+            throw new Error((data && data.error) || 'Request failed (' + res.status + ')');
+          }, function () {
+            throw new Error('Request failed (' + res.status + ')');
+          });
+        }
         return res.json();
       })
       .then(function (data) {
