@@ -39,11 +39,11 @@
     </div>
   </header>
 
-  <main class="container">
+  <main class="{{ 'container-wide' if active_page == 'admin' else 'container' }}">
     {% block content %}{% endblock %}
   </main>
 
-  <footer class="site-footer container">
+  <footer class="site-footer {{ 'container-wide' if active_page == 'admin' else 'container' }}">
     <p>This is a university benchmarking project, not a commercial product.</p>
   </footer>
 
