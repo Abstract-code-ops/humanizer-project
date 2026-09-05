@@ -301,7 +301,7 @@ def _load_desklib_model(name: str, cache_dir: str, device: str):
             # output) in below.
             outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
             last_hidden_state = outputs[0]
-            mask = attention_mask.unsqueeze(-1).expand(last_hidden_state.size()).float()
+            mask = attention_mask.unsqueeze(-1).expand(last_hidden_state.size()).to(last_hidden_state.dtype)
             summed = torch.sum(last_hidden_state * mask, dim=1)
             counted = torch.clamp(mask.sum(dim=1), min=1e-9)
             pooled = summed / counted
