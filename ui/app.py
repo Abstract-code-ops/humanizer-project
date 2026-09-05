@@ -12,6 +12,7 @@ import json
 import os
 import sys
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from functools import wraps
 
@@ -119,46 +120,54 @@ def api_humanize():
     detector_model = cfg["detector"]["model"]
 
     candidates = {}
-
-    # paraphrase
-    try:
-        candidates["paraphrase"] = paraphrase.humanize(
-            text, strength=cfg["paraphrase"]["default_strength"]
-        )
-    except Exception as e:
-        app.logger.warning("paraphrase candidate failed: %s", e)
-
-    # naive_bt
-    try:
-        candidates["naive_bt"] = naive_bt.humanize(text)
-    except Exception as e:
-        app.logger.warning("naive_bt candidate failed: %s", e)
-
-    # Adversarial — re-enabled now that the Modal backend runs the whole
-    # rewrite -> detect -> repeat loop server-side in a single call (see
-    # deploy/modal_app.py's Adversarial class, POST /adversarial). Keep a
-    # reference to the instance (not just its return value) so its
-    # last_response — the full iteration trace, llm_calls_used, etc. — is
-    # available below for the admin log.
     adv_loop = AdversarialLoop()
-    try:
-        candidates["adversarial"] = adv_loop.humanize(text)
-    except Exception as e:
-        app.logger.warning("adversarial candidate failed: %s", e)
+
+    # paraphrase, naive_bt, and adversarial are independent of each other —
+    # each is a blocking network call to a DIFFERENT Modal container class,
+    # and previously ran one after another. If more than one of those
+    # containers happens to be cold at the same time (easy, given they all
+    # share the same scaledown_window), the cold-start costs added up
+    # instead of overlapping — that's what actually blew past gunicorn's
+    # 180s worker timeout, not any single endpoint being broken (every
+    # downstream call was still returning 200, just too slowly in total).
+    # Running them on threads collapses worst-case latency from "sum of
+    # every cold start" down to "whichever one is slowest".
+    candidate_tasks = {
+        "paraphrase": lambda: paraphrase.humanize(
+            text, strength=cfg["paraphrase"]["default_strength"]
+        ),
+        "naive_bt": lambda: naive_bt.humanize(text),
+        "adversarial": lambda: adv_loop.humanize(text),
+    }
+    with ThreadPoolExecutor(max_workers=len(candidate_tasks)) as pool:
+        future_to_tier = {pool.submit(fn): tier for tier, fn in candidate_tasks.items()}
+        for future in as_completed(future_to_tier):
+            tier = future_to_tier[future]
+            try:
+                candidates[tier] = future.result()
+            except Exception as e:
+                app.logger.warning("%s candidate failed: %s", tier, e)
 
     if not candidates:
         return jsonify({
             "error": "all humanize backends failed (endpoints may be cold-starting — try again)"
         }), 502
 
-    # Score each candidate, keep the lowest (most human) proxy_score.
+    # Same reasoning for scoring: one /detect call per candidate, each
+    # independent of the others, run in parallel rather than in sequence.
     scored = []
-    for tier_name, candidate_text in candidates.items():
-        try:
-            s = proxy_detector.score(candidate_text, model=detector_model)
-            scored.append((s, tier_name, candidate_text))
-        except Exception as e:
-            app.logger.warning("scoring candidate %s failed: %s", tier_name, e)
+    with ThreadPoolExecutor(max_workers=len(candidates)) as pool:
+        future_to_candidate = {
+            pool.submit(proxy_detector.score, candidate_text, model=detector_model): (tier_name, candidate_text)
+            for tier_name, candidate_text in candidates.items()
+        }
+        for future in as_completed(future_to_candidate):
+            tier_name, candidate_text = future_to_candidate[future]
+            try:
+                s = future.result()
+                scored.append((s, tier_name, candidate_text))
+            except Exception as e:
+                app.logger.warning("scoring candidate %s failed: %s", tier_name, e)
 
     if not scored:
         return jsonify({"error": "detector scoring failed for all candidates"}), 502
