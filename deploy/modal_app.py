@@ -100,7 +100,7 @@ MAX_SENTENCES_PER_REQUEST = 200
 # without paying idle GPU cost around the clock like a permanent
 # min_containers=1 would. First request after a longer idle gap still pays
 # the full cold-start cost.
-SCALEDOWN_WINDOW = 150  # seconds — tune between 120-180 as you like
+SCALEDOWN_WINDOW = 240  # seconds — tune between 120-180 as you like
 
 
 def _split_sentences(text: str) -> list[str]:
@@ -269,6 +269,18 @@ def _load_desklib_model(name: str, cache_dir: str, device: str):
     attention-mask-weighted mean desklib uses (their model card's
     predict_single_text), rather than a plain .mean(dim=1) that would
     incorrectly include padded positions in a batched call.
+
+    SECOND BUG, found once the above was actually deployed: passing
+    torch_dtype=torch.float16 to DesklibAIDetectionModel.from_pretrained()
+    below cast self.classifier to fp16 but left self.model (loaded via the
+    nested AutoModel.from_config() call above) in fp32 — that casting
+    kwarg's guarantees only cover from_pretrained's own native loading path,
+    which this nested-AutoModel pattern isn't part of. Crashed every /detect
+    call with "mat1 and mat2 must have the same dtype, but got Float and
+    Half" the moment it ran, at least loud enough to actually notice. Fixed
+    by loading in default fp32 and calling .half() on the fully assembled
+    model afterward instead — see the loading code below for why that's
+    guaranteed consistent where the kwarg wasn't.
     """
     import torch
     from transformers import AutoConfig, AutoModel, AutoTokenizer, PreTrainedModel
@@ -297,11 +309,21 @@ def _load_desklib_model(name: str, cache_dir: str, device: str):
             return torch.sigmoid(logits).squeeze(-1)
 
     tok = AutoTokenizer.from_pretrained(name, cache_dir=cache_dir)
+    # NOT torch_dtype=torch.float16 here: that kwarg's dtype-casting only
+    # reliably reaches parameters loaded through from_pretrained's own
+    # native path. self.model is built via a NESTED AutoModel.from_config()
+    # call inside __init__, which doesn't participate in that casting the
+    # same way — the result was self.model staying fp32 while self.classifier
+    # (created directly in __init__) picked up fp16, producing a "mat1 and
+    # mat2 must have the same dtype" crash the first time this actually ran.
+    # Loading in default fp32 and casting the FULLY ASSEMBLED model with
+    # .half() afterward guarantees every submodule ends up in the same
+    # dtype, since it's one uniform pass over the whole thing rather than
+    # two independent loading paths that can disagree.
     model = (
-        DesklibAIDetectionModel.from_pretrained(
-            name, cache_dir=cache_dir, torch_dtype=torch.float16
-        )
+        DesklibAIDetectionModel.from_pretrained(name, cache_dir=cache_dir)
         .to(device)
+        .half()
         .eval()
     )
     return tok, model
