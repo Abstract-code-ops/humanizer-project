@@ -226,6 +226,88 @@ def health():
 
 
 # --------------------------------------------------------------------------
+# Shared desklib loader — used by both Detector and Adversarial's
+# @modal.enter(). Defined once at module level (rather than duplicated
+# inside each class, which is what this file used to do) specifically
+# because that duplication is what let a real bug survive silently in two
+# places at once. See the docstring inside for what that bug was.
+#
+# Imports live inside the function body, not at true module top level, on
+# purpose: this file gets parsed locally by `modal deploy` on a machine that
+# may not have torch/transformers installed — only the remote container
+# (built from `image`) does. A function body's imports don't execute until
+# the function is called, so this stays safe to import/parse locally while
+# still only running inside the warm container at request time.
+# --------------------------------------------------------------------------
+def _load_desklib_model(name: str, cache_dir: str, device: str):
+    """Loads desklib/ai-text-detector-v1.01 correctly.
+
+    BUG THIS FIXES: the previous version defined its own plain
+    torch.nn.Module wrapper and loaded the encoder with
+    `AutoModel.from_pretrained(name)` directly. That's wrong for this
+    checkpoint — desklib's actual published class is a `PreTrainedModel`
+    subclass with the encoder stored under `self.model` (built empty via
+    `AutoModel.from_config`) and a `self.classifier` head, and the
+    checkpoint's saved weights are namespaced accordingly (`model.*`,
+    `classifier.*`). Loading straight into a bare AutoModel means almost
+    none of the checkpoint's parameter names match what AutoModel expects,
+    so transformers silently random-initializes the entire backbone instead
+    of erroring — which is exactly what
+    "Some weights ... were not initialized ... and are newly initialized"
+    followed by a list covering essentially every parameter means. The
+    detector was running on a randomly-initialized encoder, producing
+    near-arbitrary scores clustered around whatever the random init happens
+    to bias sigmoid toward — consistent with real AI text scoring ~43%
+    while other detectors call the same text 100% AI.
+
+    Fix: define the wrapper exactly as desklib's own model card does
+    (self.model = AutoModel.from_config(config), not from_pretrained) and
+    load the WHOLE wrapper via DesklibAIDetectionModel.from_pretrained(),
+    so the checkpoint's model.*/classifier.* keys land on the matching
+    self.model/self.classifier attributes instead of a plain AutoModel with
+    no matching keys at all. Also switched pooling to the exact
+    attention-mask-weighted mean desklib uses (their model card's
+    predict_single_text), rather than a plain .mean(dim=1) that would
+    incorrectly include padded positions in a batched call.
+    """
+    import torch
+    from transformers import AutoConfig, AutoModel, AutoTokenizer, PreTrainedModel
+
+    class DesklibAIDetectionModel(PreTrainedModel):
+        config_class = AutoConfig
+
+        def __init__(self, config):
+            super().__init__(config)
+            self.model = AutoModel.from_config(config)
+            self.classifier = torch.nn.Linear(config.hidden_size, 1)
+            self.init_weights()
+
+        def forward(self, input_ids=None, attention_mask=None, **kwargs):
+            # **kwargs absorbs-and-drops token_type_ids (DeBERTa doesn't
+            # need it at inference) — this is the Iteration 6 fix, still
+            # needed since we still pass **inputs (the full tokenizer
+            # output) in below.
+            outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
+            last_hidden_state = outputs[0]
+            mask = attention_mask.unsqueeze(-1).expand(last_hidden_state.size()).float()
+            summed = torch.sum(last_hidden_state * mask, dim=1)
+            counted = torch.clamp(mask.sum(dim=1), min=1e-9)
+            pooled = summed / counted
+            logits = self.classifier(pooled)
+            return torch.sigmoid(logits).squeeze(-1)
+
+    tok = AutoTokenizer.from_pretrained(name, cache_dir=cache_dir)
+    model = (
+        DesklibAIDetectionModel.from_pretrained(
+            name, cache_dir=cache_dir, torch_dtype=torch.float16
+        )
+        .to(device)
+        .eval()
+    )
+    return tok, model
+
+
+# --------------------------------------------------------------------------
 # /detect  — desklib (default) or RADAR, selected via {"model": "..."}
 # Loaded once per container in @modal.enter(), kept on GPU in fp16.
 # --------------------------------------------------------------------------
@@ -239,29 +321,9 @@ def health():
 class Detector:
     @modal.enter()
     def load(self):
-        import torch
-        from transformers import AutoTokenizer, AutoModel
-
-        class DesklibAIDetectionModel(torch.nn.Module):
-            def __init__(self, base_model_name):
-                super().__init__()
-                self.base = AutoModel.from_pretrained(base_model_name)
-                hidden = self.base.config.hidden_size
-                self.classifier = torch.nn.Linear(hidden, 1)
-
-            def forward(self, input_ids=None, attention_mask=None, **kwargs):
-                # **kwargs absorbs-and-drops token_type_ids (DeBERTa doesn't
-                # need it at inference) — this is the Iteration 6 fix.
-                out = self.base(input_ids=input_ids, attention_mask=attention_mask)
-                pooled = out.last_hidden_state.mean(dim=1)
-                logit = self.classifier(pooled).squeeze(-1)
-                return torch.sigmoid(logit)
-
         self.device = "cuda"
-        name = "desklib/ai-text-detector-v1.01"
-        self.desklib_tok = AutoTokenizer.from_pretrained(name, cache_dir=MODEL_CACHE)
-        self.desklib_model = (
-            DesklibAIDetectionModel(name).to(self.device).half().eval()
+        self.desklib_tok, self.desklib_model = _load_desklib_model(
+            "desklib/ai-text-detector-v1.01", MODEL_CACHE, self.device
         )
 
         # RADAR is much bigger (Vicuna-7B backbone) — load it lazily, only if
@@ -548,8 +610,6 @@ class Adversarial:
         import torch
         from google import genai
         from transformers import (
-            AutoTokenizer,
-            AutoModel,
             T5Tokenizer,
             T5ForConditionalGeneration,
             MarianMTModel,
@@ -560,23 +620,8 @@ class Adversarial:
         self.device = "cuda"
 
         # ---- detector (desklib) ----
-        class DesklibAIDetectionModel(torch.nn.Module):
-            def __init__(self, base_model_name):
-                super().__init__()
-                self.base = AutoModel.from_pretrained(base_model_name)
-                hidden = self.base.config.hidden_size
-                self.classifier = torch.nn.Linear(hidden, 1)
-
-            def forward(self, input_ids=None, attention_mask=None, **kwargs):
-                out = self.base(input_ids=input_ids, attention_mask=attention_mask)
-                pooled = out.last_hidden_state.mean(dim=1)
-                logit = self.classifier(pooled).squeeze(-1)
-                return torch.sigmoid(logit)
-
-        detector_name = "desklib/ai-text-detector-v1.01"
-        self.detect_tok = AutoTokenizer.from_pretrained(detector_name, cache_dir=MODEL_CACHE)
-        self.detect_model = (
-            DesklibAIDetectionModel(detector_name).to(self.device).half().eval()
+        self.detect_tok, self.detect_model = _load_desklib_model(
+            "desklib/ai-text-detector-v1.01", MODEL_CACHE, self.device
         )
 
         # ---- paraphraser ----
@@ -719,18 +764,15 @@ class Adversarial:
         max_output_tokens = min(int(approx_input_tokens * 2.5), 800)
 
         response = self.gemini_client.models.generate_content(
-          model=DEFAULT_LLM_MODEL,
-          config={
-              "system_instruction": system_instruction,
-              "temperature": min(0.5 + 0.15 * strength, 1.2),
-              "max_output_tokens": max_output_tokens,
-              "thinking_config": {
-                  "thinking_level": "LOW",
-              },
-          },
-          contents=f"{intensity}\n\nText:\n{text}",
+            model=DEFAULT_LLM_MODEL,
+            config={
+                "system_instruction": system_instruction,
+                "temperature": min(0.5 + 0.15 * strength, 1.2),
+                "max_output_tokens": max_output_tokens,
+                "thinking_level": "minimal",  # rewriting doesn't need extended reasoning
+            },
+            contents=f"{intensity}\n\nText:\n{text}",
         )
-
         rewritten = (response.text or "").strip()
         return rewritten if rewritten else text
 
