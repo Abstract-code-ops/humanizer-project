@@ -784,17 +784,20 @@ class Adversarial:
         # inputs shouldn't pay for a large token allowance.
         approx_input_tokens = max(len(text.split()), 20)
         max_output_tokens = min(int(approx_input_tokens * 2.5), 800)
-
+        
         response = self.gemini_client.models.generate_content(
-            model=DEFAULT_LLM_MODEL,
-            config={
-                "system_instruction": system_instruction,
-                "temperature": min(0.5 + 0.15 * strength, 1.2),
-                "max_output_tokens": max_output_tokens,
-                "thinking_level": "minimal",  # rewriting doesn't need extended reasoning
-            },
-            contents=f"{intensity}\n\nText:\n{text}",
+          model=DEFAULT_LLM_MODEL,
+          config={
+              "system_instruction": system_instruction,
+              "temperature": min(0.5 + 0.15 * strength, 1.2),
+              "max_output_tokens": max_output_tokens,
+              "thinking_config": {
+                  "thinking_level": "LOW",
+              },
+          },
+          contents=f"{intensity}\n\nText:\n{text}",
         )
+
         rewritten = (response.text or "").strip()
         return rewritten if rewritten else text
 
