@@ -1,0 +1,124 @@
+{% extends "_base.html" %}
+{% block title %}Admin — Humanizer Bench{% endblock %}
+{% block content %}
+
+  <section class="admin-hero">
+    <h1>Call history</h1>
+    <p class="subhead">
+      {{ shown }} of {{ total_logged }} logged calls shown.
+      Read-only — this page doesn't modify or delete anything.
+    </p>
+  </section>
+
+  <section class="stat-grid">
+    <div class="stat-card">
+      <span class="stat-card-value">{{ stats.total_calls }}</span>
+      <span class="stat-card-label">Total calls logged</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-card-value">{{ stats.humanize_calls }}</span>
+      <span class="stat-card-label">Humanize calls</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-card-value">{{ stats.detect_calls }}</span>
+      <span class="stat-card-label">Detect calls</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-card-value">{{ stats.adversarial_runs }}</span>
+      <span class="stat-card-label">Adversarial runs</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-card-value">
+        {{ (stats.adversarial_target_reached_rate * 100) | round(1) if stats.adversarial_target_reached_rate is not none else '—' }}{{ '%' if stats.adversarial_target_reached_rate is not none else '' }}
+      </span>
+      <span class="stat-card-label">Adversarial hit target</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-card-value">{{ stats.avg_adversarial_iterations if stats.avg_adversarial_iterations is not none else '—' }}</span>
+      <span class="stat-card-label">Avg iterations / run</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-card-value">{{ stats.avg_llm_calls_per_run if stats.avg_llm_calls_per_run is not none else '—' }}</span>
+      <span class="stat-card-label">Avg Gemini calls / run</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-card-value">{{ stats.total_llm_calls }}</span>
+      <span class="stat-card-label">Total Gemini calls</span>
+    </div>
+  </section>
+
+  {% if stats.tier_wins %}
+  <section class="tier-wins-row">
+    <p class="admin-section-label">Tier win breakdown</p>
+    <div class="tier-wins-bars">
+      {% for tier, count in stats.tier_wins.items() %}
+      <div class="tier-win-item">
+        <span class="tier-win-name">{{ tier }}</span>
+        <div class="tier-win-bar-track">
+          <div class="tier-win-bar-fill" style="width: {{ (count / stats.humanize_calls * 100) if stats.humanize_calls else 0 }}%"></div>
+        </div>
+        <span class="tier-win-count">{{ count }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="admin-table-section">
+    <p class="admin-section-label">Recent calls (newest first)</p>
+
+    {% if not entries %}
+    <p class="empty-state">No calls logged yet.</p>
+    {% else %}
+    <div class="admin-table-wrap">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Time (UTC)</th>
+            <th>Endpoint</th>
+            <th>Words</th>
+            <th>Winning tier</th>
+            <th>Score</th>
+            <th>Similarity</th>
+            <th>Readability</th>
+            <th>Adversarial</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in entries %}
+          <tr>
+            <td class="mono">{{ e.timestamp[:19].replace('T', ' ') if e.timestamp else '—' }}</td>
+            <td><span class="badge badge-{{ e.endpoint }}">{{ e.endpoint }}</span></td>
+            <td class="mono">{{ e.input_word_count if e.input_word_count is not none else '—' }}{% if e.input_capped %} <span class="capped-flag" title="Input was over the word cap">*</span>{% endif %}</td>
+            <td>{{ e.winning_tier or '—' }}</td>
+            <td class="mono">{{ e.final_score if e.final_score is not none else '—' }}</td>
+            <td class="mono">{{ e.similarity if e.similarity is not none else '—' }}</td>
+            <td class="mono">{{ e.readability if e.readability is not none else '—' }}</td>
+            <td class="mono">
+              {% if e.adversarial_detail %}
+                {{ e.adversarial_detail.original_ai_probability | round(3) }} → {{ e.adversarial_detail.ai_probability | round(3) }}
+                <span class="admin-subtle">({{ e.adversarial_detail.iterations_used }} it., {{ e.adversarial_detail.llm_calls_used }} llm)</span>
+              {% else %}—{% endif %}
+            </td>
+            <td>
+              {% if e.adversarial_detail or e.candidate_scores %}
+              <details class="admin-detail-toggle">
+                <summary>detail</summary>
+                <pre class="admin-detail-json">{{ e | tojson(indent=2) }}</pre>
+              </details>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </section>
+
+  <section class="admin-api-note">
+    <p>JSON API: <code>/admin/api/calls?token={{ token }}</code> (add <code>&amp;limit=N</code> to change how many are returned).</p>
+  </section>
+
+{% endblock %}
