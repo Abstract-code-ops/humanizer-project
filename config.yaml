@@ -33,7 +33,7 @@ tiers:
 
 # Detector used for all proxy_score values / adversarial loop reward.
 detector:
-  model: "desklib/ai-text-detector-v1.01"   # primary, RAID-tuned
+  model: "Oxidane/tmr-ai-text-detector"           # primary, RAID-tuned
   secondary_model: "TrustSafeAI/RADAR-Vicuna-7B"  # available, not used for proxy_score
   provider: hf   # served on Modal
 
