@@ -14,10 +14,14 @@ Bug fixes baked in here (see docs/decision-log.md for the full story — do not
 regress these):
   - Iteration 6: image needs sentencepiece + protobuf + tiktoken, or T5's fast
     tokenizer silently falls through to a broken tiktoken conversion path.
-  - Iteration 6: desklib's forward() must accept & drop **kwargs (token_type_ids)
-    since DeBERTa-v3 doesn't need it at inference.
-  - Iteration 6: pin transformers<4.49 (desklib custom PreTrainedModel subclass
-    breaks on >=4.49's all_tied_weights_keys).
+  - Iteration 6 [OBSOLETE — kept for history]: desklib's forward() had to
+    accept & drop **kwargs (token_type_ids), and transformers was pinned
+    <4.49 because desklib's custom PreTrainedModel subclass broke on
+    >=4.49's all_tied_weights_keys. Both only mattered for desklib, which
+    this file no longer uses (see the detector-loading section below for
+    why) — the transformers<4.49 pin itself is left in place since nothing
+    currently requires unpinning it, not because it's still needed for this
+    specific reason.
   - Iteration 12/13: translate/paraphrase ONE SENTENCE AT A TIME — meaning
     each individual model input must be a single sentence, never several
     sentences concatenated into one ~400-token block (both MarianMT and
@@ -100,7 +104,7 @@ MAX_SENTENCES_PER_REQUEST = 200
 # without paying idle GPU cost around the clock like a permanent
 # min_containers=1 would. First request after a longer idle gap still pays
 # the full cold-start cost.
-SCALEDOWN_WINDOW = 240  # seconds — tune between 120-180 as you like
+SCALEDOWN_WINDOW = 150  # seconds — tune between 120-180 as you like
 
 
 def _split_sentences(text: str) -> list[str]:
@@ -226,11 +230,35 @@ def health():
 
 
 # --------------------------------------------------------------------------
-# Shared desklib loader — used by both Detector and Adversarial's
-# @modal.enter(). Defined once at module level (rather than duplicated
-# inside each class, which is what this file used to do) specifically
-# because that duplication is what let a real bug survive silently in two
-# places at once. See the docstring inside for what that bug was.
+# Shared AI-text-detector loader — used by both Detector and Adversarial's
+# @modal.enter(). Defined once at module level so a fix or a future swap
+# only needs to happen in one place.
+#
+# HISTORY: this used to load desklib/ai-text-detector-v1.01 via a custom
+# PreTrainedModel wrapper class (self.model + self.classifier, loaded
+# through a nested AutoModel.from_config()). That approach went through
+# four rounds of real, distinct bugs in production — a silently
+# randomly-initialized backbone (checkpoint key names didn't match a bare
+# AutoModel), then two different fp16/dtype mismatches once that was fixed,
+# then a DeBERTa-specific fp16 numerical-overflow bug (every input
+# saturating to ~100%) once THOSE were fixed. Each one only became visible
+# once the previous one stopped hiding it.
+#
+# Rather than keep patching that integration, swapped to
+# Oxidane/tmr-ai-text-detector: RoBERTa-base (125M, smaller and faster than
+# desklib's DeBERTa-v3-large), trained on the same RAID benchmark, using
+# Focal Loss + Self-Hard-Negative iterative mining specifically to reduce
+# false positives on human text — directly targeting the "100% on text
+# other detectors call <20% AI" symptom that prompted this switch. Loads
+# through plain AutoModelForSequenceClassification, no custom wrapper class
+# at all, which is what actually eliminates the whole bug category above
+# rather than fixing it a fifth time. RoBERTa also doesn't share DeBERTa's
+# fp16 disentangled-attention instability, so fp16 is safe here.
+#
+# Standard 2-class classification head: index 0 = human, index 1 = AI (per
+# this model's documented usage). Label order isn't universally
+# standardized across checkpoints — re-verify this if swapping detectors
+# again rather than assuming.
 #
 # Imports live inside the function body, not at true module top level, on
 # purpose: this file gets parsed locally by `modal deploy` on a machine that
@@ -239,99 +267,40 @@ def health():
 # the function is called, so this stays safe to import/parse locally while
 # still only running inside the warm container at request time.
 # --------------------------------------------------------------------------
-def _load_desklib_model(name: str, cache_dir: str, device: str):
-    """Loads desklib/ai-text-detector-v1.01 correctly.
+DETECTOR_MODEL_NAME = "Oxidane/tmr-ai-text-detector"
+DETECTOR_AI_LABEL_INDEX = 1
 
-    BUG THIS FIXES: the previous version defined its own plain
-    torch.nn.Module wrapper and loaded the encoder with
-    `AutoModel.from_pretrained(name)` directly. That's wrong for this
-    checkpoint — desklib's actual published class is a `PreTrainedModel`
-    subclass with the encoder stored under `self.model` (built empty via
-    `AutoModel.from_config`) and a `self.classifier` head, and the
-    checkpoint's saved weights are namespaced accordingly (`model.*`,
-    `classifier.*`). Loading straight into a bare AutoModel means almost
-    none of the checkpoint's parameter names match what AutoModel expects,
-    so transformers silently random-initializes the entire backbone instead
-    of erroring — which is exactly what
-    "Some weights ... were not initialized ... and are newly initialized"
-    followed by a list covering essentially every parameter means. The
-    detector was running on a randomly-initialized encoder, producing
-    near-arbitrary scores clustered around whatever the random init happens
-    to bias sigmoid toward — consistent with real AI text scoring ~43%
-    while other detectors call the same text 100% AI.
 
-    Fix: define the wrapper exactly as desklib's own model card does
-    (self.model = AutoModel.from_config(config), not from_pretrained) and
-    load the WHOLE wrapper via DesklibAIDetectionModel.from_pretrained(),
-    so the checkpoint's model.*/classifier.* keys land on the matching
-    self.model/self.classifier attributes instead of a plain AutoModel with
-    no matching keys at all. Also switched pooling to the exact
-    attention-mask-weighted mean desklib uses (their model card's
-    predict_single_text), rather than a plain .mean(dim=1) that would
-    incorrectly include padded positions in a batched call.
-
-    SECOND BUG, found once the above was actually deployed: passing
-    torch_dtype=torch.float16 to DesklibAIDetectionModel.from_pretrained()
-    below cast self.classifier to fp16 but left self.model (loaded via the
-    nested AutoModel.from_config() call above) in fp32 — that casting
-    kwarg's guarantees only cover from_pretrained's own native loading path,
-    which this nested-AutoModel pattern isn't part of. Crashed every /detect
-    call with "mat1 and mat2 must have the same dtype, but got Float and
-    Half" the moment it ran, at least loud enough to actually notice. Fixed
-    by loading in default fp32 and calling .half() on the fully assembled
-    model afterward instead — see the loading code below for why that's
-    guaranteed consistent where the kwarg wasn't.
-    """
+def _load_detector_model(name: str, cache_dir: str, device: str):
     import torch
-    from transformers import AutoConfig, AutoModel, AutoTokenizer, PreTrainedModel
-
-    class DesklibAIDetectionModel(PreTrainedModel):
-        config_class = AutoConfig
-
-        def __init__(self, config):
-            super().__init__(config)
-            self.model = AutoModel.from_config(config)
-            self.classifier = torch.nn.Linear(config.hidden_size, 1)
-            self.init_weights()
-
-        def forward(self, input_ids=None, attention_mask=None, **kwargs):
-            # **kwargs absorbs-and-drops token_type_ids (DeBERTa doesn't
-            # need it at inference) — this is the Iteration 6 fix, still
-            # needed since we still pass **inputs (the full tokenizer
-            # output) in below.
-            outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
-            last_hidden_state = outputs[0]
-            mask = attention_mask.unsqueeze(-1).expand(last_hidden_state.size()).to(last_hidden_state.dtype)
-            summed = torch.sum(last_hidden_state * mask, dim=1)
-            counted = torch.clamp(mask.sum(dim=1), min=1e-9)
-            pooled = summed / counted
-            logits = self.classifier(pooled)
-            return torch.sigmoid(logits).squeeze(-1)
+    from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
     tok = AutoTokenizer.from_pretrained(name, cache_dir=cache_dir)
-    # NOT torch_dtype=torch.float16 here: that kwarg's dtype-casting only
-    # reliably reaches parameters loaded through from_pretrained's own
-    # native path. self.model is built via a NESTED AutoModel.from_config()
-    # call inside __init__, which doesn't participate in that casting the
-    # same way — the result was self.model staying fp32 while self.classifier
-    # (created directly in __init__) picked up fp16, producing a "mat1 and
-    # mat2 must have the same dtype" crash the first time this actually ran.
-    # Loading in default fp32 and casting the FULLY ASSEMBLED model with
-    # .half() afterward guarantees every submodule ends up in the same
-    # dtype, since it's one uniform pass over the whole thing rather than
-    # two independent loading paths that can disagree.
     model = (
-        DesklibAIDetectionModel.from_pretrained(name, cache_dir=cache_dir)
+        AutoModelForSequenceClassification.from_pretrained(
+            name, cache_dir=cache_dir, torch_dtype=torch.float16
+        )
         .to(device)
-        .half()
         .eval()
     )
     return tok, model
 
 
+def _score_with_detector(tok, model, device: str, text: str) -> float:
+    import torch
+
+    inputs = tok(text, return_tensors="pt", truncation=True, max_length=512)
+    inputs = {k: v.to(device) for k, v in inputs.items()}
+    with torch.inference_mode():
+        logits = model(**inputs).logits
+        probs = torch.softmax(logits.float(), dim=-1)
+        return probs[0][DETECTOR_AI_LABEL_INDEX].item()
+
+
 # --------------------------------------------------------------------------
-# /detect  — desklib (default) or RADAR, selected via {"model": "..."}
-# Loaded once per container in @modal.enter(), kept on GPU in fp16.
+# /detect  — Oxidane/tmr-ai-text-detector (default) or RADAR, selected via
+# {"model": "..."}. Loaded once per container in @modal.enter(), kept on
+# GPU in fp16.
 # --------------------------------------------------------------------------
 @app.cls(
     image=image,
@@ -344,8 +313,8 @@ class Detector:
     @modal.enter()
     def load(self):
         self.device = "cuda"
-        self.desklib_tok, self.desklib_model = _load_desklib_model(
-            "desklib/ai-text-detector-v1.01", MODEL_CACHE, self.device
+        self.detector_tok, self.detector_model = _load_detector_model(
+            DETECTOR_MODEL_NAME, MODEL_CACHE, self.device
         )
 
         # RADAR is much bigger (Vicuna-7B backbone) — load it lazily, only if
@@ -375,15 +344,10 @@ class Detector:
         import torch
 
         text = item.get("text", "")
-        model_name = item.get("model", "desklib/ai-text-detector-v1.01")
+        model_name = item.get("model", DETECTOR_MODEL_NAME)
 
-        if model_name == "desklib/ai-text-detector-v1.01":
-            inputs = self.desklib_tok(
-                text, return_tensors="pt", truncation=True, max_length=512
-            )
-            inputs = {k: v.to(self.device) for k, v in inputs.items()}
-            with torch.inference_mode():
-                prob = self.desklib_model(**inputs).float().item()
+        if model_name == DETECTOR_MODEL_NAME:
+            prob = _score_with_detector(self.detector_tok, self.detector_model, self.device, text)
             return {"ai_probability": prob}
 
         elif model_name == "TrustSafeAI/RADAR-Vicuna-7B":
@@ -641,9 +605,9 @@ class Adversarial:
 
         self.device = "cuda"
 
-        # ---- detector (desklib) ----
-        self.detect_tok, self.detect_model = _load_desklib_model(
-            "desklib/ai-text-detector-v1.01", MODEL_CACHE, self.device
+        # ---- detector ----
+        self.detect_tok, self.detect_model = _load_detector_model(
+            DETECTOR_MODEL_NAME, MODEL_CACHE, self.device
         )
 
         # ---- paraphraser ----
@@ -690,12 +654,7 @@ class Adversarial:
         self.gemini_client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 
     def _score(self, text: str) -> float:
-        import torch
-
-        inputs = self.detect_tok(text, return_tensors="pt", truncation=True, max_length=512)
-        inputs = {k: v.to(self.device) for k, v in inputs.items()}
-        with torch.inference_mode():
-            return self.detect_model(**inputs).float().item()
+        return _score_with_detector(self.detect_tok, self.detect_model, self.device, text)
 
     def _similarity(self, a: str, b: str) -> float:
         from sentence_transformers import util
@@ -784,7 +743,7 @@ class Adversarial:
         # inputs shouldn't pay for a large token allowance.
         approx_input_tokens = max(len(text.split()), 20)
         max_output_tokens = min(int(approx_input_tokens * 2.5), 800)
-        
+
         response = self.gemini_client.models.generate_content(
           model=DEFAULT_LLM_MODEL,
           config={
@@ -792,7 +751,7 @@ class Adversarial:
               "temperature": min(0.5 + 0.15 * strength, 1.2),
               "max_output_tokens": max_output_tokens,
               "thinking_config": {
-                  "thinking_level": "LOW",
+                   "thinking_level": "LOW",
               },
           },
           contents=f"{intensity}\n\nText:\n{text}",
