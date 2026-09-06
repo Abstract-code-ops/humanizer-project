@@ -110,7 +110,7 @@ def api_humanize():
 
     if word_count(raw_text) > word_cap or has_overlong_token(raw_text, max_token_length=20):
         return jsonify({
-            "error": "Input exceeds the 200-word limit or contains a token longer than 20 characters. Please shorten it before submitting."
+            "error": f"Input exceeds the {word_cap}-word limit or contains a token longer than 20 characters. Please shorten it before submitting."
         }), 400
 
     text = raw_text

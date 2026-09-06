@@ -582,15 +582,25 @@ html[data-theme='light'] .icon-moon { display: block; }
   margin-top: 22px;
 }
 .detector-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-family: var(--font-mono);
   font-size: 0.72rem;
-  padding: 6px 10px;
+  padding: 6px 10px 6px 6px;
   border-radius: 999px;
   border: 1px solid var(--border);
   color: var(--text-muted);
   opacity: 0.4;
   filter: grayscale(1);
   transition: opacity 0.25s ease, filter 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+}
+.detector-logo {
+  width: 18px;
+  height: 18px;
+  display: inline-block;
+  flex-shrink: 0;
+  vertical-align: middle;
 }
 .detector-chip.active {
   opacity: 1;

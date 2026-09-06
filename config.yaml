@@ -79,6 +79,6 @@ skill_humanizer:
 humanize_best_of:
   # Tiers used by the primary "Humanize" UI action (3-way best-of).
   candidates: [paraphrase, naive_bt, adversarial]
-  word_cap: 200
+  word_cap: 400
 
 results_csv: data/results.csv

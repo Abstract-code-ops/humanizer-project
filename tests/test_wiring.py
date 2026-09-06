@@ -18,9 +18,9 @@ def test_cap_words_under_limit():
 
 
 def test_cap_words_over_limit():
-    text = " ".join(f"w{i}" for i in range(250))
-    capped = cap_words(text, max_words=200)
-    assert word_count(capped) == 200
+    text = " ".join(f"w{i}" for i in range(450))
+    capped = cap_words(text, max_words=400)
+    assert word_count(capped) == 400
 
 
 def test_split_sentences_basic():
@@ -42,7 +42,7 @@ def test_has_overlong_token():
 
 def test_api_humanize_rejects_input_over_word_limit():
     client = app.test_client()
-    text = " ".join(f"w{i}" for i in range(201))
+    text = " ".join(f"w{i}" for i in range(401))
     resp = client.post("/api/humanize", json={"text": text})
     assert resp.status_code == 400
     assert "word limit" in resp.get_json()["error"].lower()

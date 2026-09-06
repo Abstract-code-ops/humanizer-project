@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var WORD_LIMIT = window.WORD_CAP || 200;
+  var WORD_LIMIT = window.WORD_CAP || 400;
   var STAGE2_MIN_MS = 2500;
   var STAGE2_MAX_MS = 4000;
   var SLOW_HINT_MS = 15000;

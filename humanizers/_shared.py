@@ -15,7 +15,7 @@ def split_sentences(text: str) -> list[str]:
     return [p.strip() for p in parts if p.strip()]
 
 
-def cap_words(text: str, max_words: int = 200) -> str:
+def cap_words(text: str, max_words: int = 400) -> str:
     """Deterministically truncate to the first `max_words` words (whitespace split)."""
     words = text.split()
     if len(words) <= max_words:
